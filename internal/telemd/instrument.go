@@ -2,7 +2,6 @@ package telemd
 
 import (
 	"bufio"
-	"fmt"
 	"github.com/edgerun/telemd/internal/telem"
 	"log"
 	"os"
