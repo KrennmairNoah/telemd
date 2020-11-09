@@ -2,6 +2,7 @@ package telemd
 
 import (
 	"bufio"
+	"fmt"
 	"github.com/edgerun/telemd/internal/telem"
 	"log"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"github.com/kylegrantlucas/speedtest"
 )
 
 type Instrument interface {
@@ -26,6 +28,7 @@ type InstrumentFactory interface {
 	NewRamInstrument() Instrument
 	NewNetworkDataRateInstrument([]string) Instrument
 	NewDiskDataRateInstrument([]string) Instrument
+	NewDownloadUploadInstrument() Instrument
 }
 
 type CpuInfoFrequencyInstrument struct{}
@@ -34,6 +37,8 @@ type CpuUtilInstrument struct{}
 type LoadInstrument struct{}
 type ProcsInstrument struct{}
 type RamInstrument struct{}
+type DownloadUploadInstrument struct{}
+
 type NetworkDataRateInstrument struct {
 	Devices []string
 }
@@ -217,6 +222,29 @@ func (instr RamInstrument) MeasureAndReport(channel telem.TelemetryChannel) {
 	channel.Put(telem.NewTelemetry("ram", float64(total-free)))
 }
 
+func (d DownloadUploadInstrument) MeasureAndReport(channel telem.TelemetryChannel) {
+	client, err := speedtest.NewDefaultClient()
+	if err != nil {
+		log.Println("error creating client", err)
+	}
+	// Pass an empty string to select the fastest server
+	server, err := client.GetServer("")
+	if err != nil {
+		log.Println("error getting server", err)
+	}
+	dwbps, err := client.Download(server)
+	if err != nil {
+		log.Println("error getting download", err)
+	}
+	channel.Put(telem.NewTelemetry("dwbps", dwbps))
+
+	upbps, err := client.Upload(server)
+	if err != nil {
+		log.Println("error getting upload", err)
+	}
+	channel.Put(telem.NewTelemetry("upbps", upbps))
+}
+
 type defaultInstrumentFactory struct{}
 
 func (d defaultInstrumentFactory) NewCpuFrequencyInstrument() Instrument {
@@ -238,7 +266,9 @@ func (d defaultInstrumentFactory) NewProcsInstrument() Instrument {
 func (d defaultInstrumentFactory) NewRamInstrument() Instrument {
 	return RamInstrument{}
 }
-
+func (d defaultInstrumentFactory) NewDownloadUploadInstrument() Instrument {
+	return DownloadUploadInstrument{}
+}
 func (d defaultInstrumentFactory) NewNetworkDataRateInstrument(devices []string) Instrument {
 	return NetworkDataRateInstrument{devices}
 }

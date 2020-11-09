@@ -51,6 +51,8 @@ func NewDefaultConfig() *Config {
 		"load":  5 * time.Second,
 		"net":   500 * time.Millisecond,
 		"disk":  500 * time.Millisecond,
+		"dwbps":   1 * time.Minute,
+		"upbps":   1 * time.Minute,
 	}
 
 	return cfg
