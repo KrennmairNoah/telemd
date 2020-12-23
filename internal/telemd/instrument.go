@@ -177,9 +177,18 @@ func (instr DiskDataRateInstrument) MeasureAndReport(channel telem.TelemetryChan
 	measureAndReport := func(device string) {
 		defer wg.Done()
 
-		statsThen := readBlockDeviceStats(device)
+		statsThen, err := readBlockDeviceStats(device)
+		if err != nil {
+			log.Println("error reading block device stats", device, err)
+			return
+		}
+
 		time.Sleep(1 * time.Second)
-		statsNow := readBlockDeviceStats(device)
+		statsNow, err := readBlockDeviceStats(device)
+		if err != nil {
+			log.Println("error reading block device stats", device, err)
+			return
+		}
 
 		rd := (statsNow[2] - statsThen[2]) * sectorSize
 		wr := (statsNow[6] - statsThen[6]) * sectorSize

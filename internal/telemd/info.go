@@ -2,6 +2,7 @@ package telemd
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"runtime"
 )
@@ -15,6 +16,7 @@ type NodeInfo struct {
 	Net      []string
 	Hostname string
 	NetSpeed string
+	NetDevice string
 }
 
 func (info NodeInfo) Print() {
@@ -26,44 +28,51 @@ func (info NodeInfo) Print() {
 	fmt.Println("Net:      ", info.Net)
 	fmt.Println("Hostname: ", info.Hostname)
 	fmt.Println("netSpeed: ", info.NetSpeed)
+	fmt.Println("netDevice: ", info.NetDevice)
 }
 
 func SysInfo() NodeInfo {
 	var info NodeInfo
 
-	err := ReadSysInfo(&info)
-	if err != nil {
-		panic(err)
-	}
+	ReadSysInfo(&info)
 
 	return info
 }
 
-func ReadSysInfo(info *NodeInfo) error {
+func ReadSysInfo(info *NodeInfo) {
 	info.Arch = runtime.GOARCH
 	info.Cpus = runtime.NumCPU()
 
-	ram, err := readMemTotal()
-	if err != nil {
-		return err
+	if ram, err := readMemTotal(); err == nil {
+		info.Ram = ram
+	} else {
+		log.Println("error reading ram info", err)
 	}
-	info.Ram = ram
 
-	boot, err := bootTime()
-	if err != nil {
-		return err
+	if boot, err := bootTime(); err == nil {
+		info.Boot = boot
+	} else {
+		log.Println("error reading boot time info", err)
 	}
-	info.Boot = boot
 
 	info.Disk = blockDevices()
 	info.Net = networkDevices()
 
-	hostname, err := os.Hostname()
-	if err != nil {
-		return err
+	if hostname, err := os.Hostname(); err == nil {
+		info.Hostname = hostname
+	} else {
+		log.Println("error reading hostname info", err)
 	}
-	info.Hostname = hostname
-	info.NetSpeed = netSpeed()
 
-	return nil
+	if netSpeed, err := netSpeed(); err == nil {
+		info.NetSpeed = netSpeed
+	} else {
+		log.Println("error reading network speed info", err)
+	}
+
+	if netDevice, err := findActiveNetDevice(); err == nil {
+		info.NetDevice = netDevice
+	} else {
+		log.Println("error reading network device info", err)
+	}
 }
