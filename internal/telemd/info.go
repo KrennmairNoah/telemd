@@ -16,6 +16,7 @@ type NodeInfo struct {
 	Net      []string
 	Hostname string
 	NetSpeed string
+	NetDevice string
 }
 
 func (info NodeInfo) Print() {
@@ -27,6 +28,7 @@ func (info NodeInfo) Print() {
 	fmt.Println("Net:      ", info.Net)
 	fmt.Println("Hostname: ", info.Hostname)
 	fmt.Println("netSpeed: ", info.NetSpeed)
+	fmt.Println("netDevice: ", info.NetDevice)
 }
 
 func SysInfo() NodeInfo {
@@ -66,5 +68,11 @@ func ReadSysInfo(info *NodeInfo) {
 		info.NetSpeed = netSpeed
 	} else {
 		log.Println("error reading network speed info", err)
+	}
+
+	if netDevice, err := findActiveNetDevice(); err == nil {
+		info.NetDevice = netDevice
+	} else {
+		log.Println("error reading network device info", err)
 	}
 }
