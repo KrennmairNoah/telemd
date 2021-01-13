@@ -56,6 +56,7 @@ func NewDefaultConfig() *Config {
 		"load":  5 * time.Second,
 		"net":   500 * time.Millisecond,
 		"disk":  500 * time.Millisecond,
+		"speed": 3 * time.Minute,
 	}
 
 	return cfg

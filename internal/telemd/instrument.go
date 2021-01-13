@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"github.com/showwin/speedtest-go/speedtest"
 )
 
 type Instrument interface {
@@ -26,6 +27,7 @@ type InstrumentFactory interface {
 	NewRamInstrument() Instrument
 	NewNetworkDataRateInstrument([]string) Instrument
 	NewDiskDataRateInstrument([]string) Instrument
+	NewSpeedInstrument() Instrument
 }
 
 type CpuInfoFrequencyInstrument struct{}
@@ -34,6 +36,8 @@ type CpuUtilInstrument struct{}
 type LoadInstrument struct{}
 type ProcsInstrument struct{}
 type RamInstrument struct{}
+type SpeedInstrument struct{}
+
 type NetworkDataRateInstrument struct {
 	Devices []string
 }
@@ -226,6 +230,22 @@ func (instr RamInstrument) MeasureAndReport(channel telem.TelemetryChannel) {
 	channel.Put(telem.NewTelemetry("ram", float64(total-free)))
 }
 
+func (instr SpeedInstrument) MeasureAndReport(channel telem.TelemetryChannel) {
+
+	user, _ := speedtest.FetchUserInfo()
+
+	serverList, _ := speedtest.FetchServerList(user)
+	targets, _ := serverList.FindServer([]int{})
+
+	for _, s := range targets {
+		s.DownloadTest(true)
+
+		channel.Put(telem.NewTelemetry("spped", s.DLSpeed))
+	}
+
+
+}
+
 type defaultInstrumentFactory struct{}
 
 func (d defaultInstrumentFactory) NewCpuFrequencyInstrument() Instrument {
@@ -254,6 +274,9 @@ func (d defaultInstrumentFactory) NewNetworkDataRateInstrument(devices []string)
 
 func (d defaultInstrumentFactory) NewDiskDataRateInstrument(devices []string) Instrument {
 	return DiskDataRateInstrument{devices}
+}
+func (d defaultInstrumentFactory) NewSpeedInstrument() Instrument {
+	return SpeedInstrument{}
 }
 
 type armInstrumentFactory struct {
