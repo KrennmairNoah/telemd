@@ -544,7 +544,8 @@ func (c KubernetesCgroupv1CpuInstrument) MeasureAndReport(channel telem.Telemetr
 }
 
 func (c KubernetesCgroupv2CpuInstrument) MeasureAndReport(channel telem.TelemetryChannel) {
-	kubepodRootDir := "/sys/fs/cgroup/k8s.io"
+	//or /k8s.io
+	kubepodRootDir := "/sys/fs/cgroup/kubepods"
 
 	for _, containerDir := range fetchKubernetesContainerDirs(kubepodRootDir) {
 		containerId := filepath.Base(containerDir)
