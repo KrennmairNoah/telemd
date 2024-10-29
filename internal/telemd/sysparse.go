@@ -13,16 +13,18 @@ import (
 
 // Reads the statistics from https://www.kernel.org/doc/Documentation/block/stat.txt
 // and returns an array where the indices correspond to the following values:
-//  0   read I/Os       requests      number of read I/Os processed
-//  1   read merges     requests      number of read I/Os merged with in-queue I/O
-//  2   read sectors    sectors       number of sectors read
-//  3   read ticks      milliseconds  total wait time for read requests
-//  4   write I/Os      requests      number of write I/Os processed
-//  5   write merges    requests      number of write I/Os merged with in-queue I/O
-//  6   write sectors   sectors       number of sectors written
-//  7   write ticks     milliseconds  total wait time for write requests
-//  8   in_flight       requests      number of I/Os currently in flight
-//  9   io_ticks        milliseconds  total time this block device has been active
+//
+//	0   read I/Os       requests      number of read I/Os processed
+//	1   read merges     requests      number of read I/Os merged with in-queue I/O
+//	2   read sectors    sectors       number of sectors read
+//	3   read ticks      milliseconds  total wait time for read requests
+//	4   write I/Os      requests      number of write I/Os processed
+//	5   write merges    requests      number of write I/Os merged with in-queue I/O
+//	6   write sectors   sectors       number of sectors written
+//	7   write ticks     milliseconds  total wait time for write requests
+//	8   in_flight       requests      number of I/Os currently in flight
+//	9   io_ticks        milliseconds  total time this block device has been active
+//
 // 10   time_in_queue   milliseconds  total wait time for all requests
 // 11   discard I/Os    requests      number of discard I/Os processed
 // 12   discard merges  requests      number of discard I/Os merged with in-queue I/O
@@ -31,7 +33,7 @@ import (
 func readBlockDeviceStats(dev string) ([]int64, error) {
 	path := "/sys/block/" + dev + "/stat"
 
-	line, err := readFirstLine(path)
+	line, err := readSpecificLine(path, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +48,7 @@ func readBlockDeviceStats(dev string) ([]int64, error) {
 // readCpuUtil returns an array of the following values from /proc/stat
 // user, nice, system, idle, iowait, irq, softirq
 func readCpuUtil() []float64 {
-	line, err := readFirstLine("/proc/stat")
+	line, err := readSpecificLine("/proc/stat", 0)
 	check(err)
 	line = strings.Trim(line, " ")
 	parts := strings.Split(line, " ")
@@ -166,16 +168,14 @@ func parseMeminfoString(sizeString string) (int64, error) {
 }
 
 func readUptime() (float64, error) {
-	line, err := readFirstLine("/proc/uptime")
+	line, err := readSpecificLine("/proc/uptime", 0)
 	if err != nil {
 		return 0, err
 	}
-
 	parts := strings.Split(line, " ")
 	if len(parts) != 2 {
 		return 0, errors.New("Unexpected number of fields in /proc/uptime: " + line)
 	}
-
 	return strconv.ParseFloat(parts[0], 64)
 }
 
@@ -192,9 +192,11 @@ func bootTime() (int64, error) {
 
 // thomas@om ~ % cat /proc/114204/net/dev
 // Inter-|   Receive                                                |  Transmit
-//  face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
-//   eth0:    6391      29    0    0    0     0          0         0        0       0    0    0    0     0       0          0
-//     lo:       0       0    0    0    0     0          0         0        0       0    0    0    0     0       0          0
+//
+//	face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+//	 eth0:    6391      29    0    0    0     0          0         0        0       0    0    0    0     0       0          0
+//	   lo:       0       0    0    0    0     0          0         0        0       0    0    0    0     0       0          0
+//
 // returns the sum over all network devices (rx, tx)
 func readTotalProcessNetworkStats(pid string, procMount string) (rx map[string]int64, tx map[string]int64, err error) {
 	path := procMount + "/" + pid + "/net/dev"

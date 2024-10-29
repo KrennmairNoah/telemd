@@ -2,6 +2,7 @@ package telemd
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"strconv"
 )
@@ -45,28 +46,34 @@ func parseInt64Array(arr []string) ([]int64, error) {
 	return ints, err
 }
 
-// readFirstLine reads and returns the first line from the given file.
-// propagates errors from os open and bufio.Scanner.
-func readFirstLine(path string) (string, error) {
+func readSpecificLine(path string, lineNumber int) (string, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
-
 	defer func() {
 		_ = file.Close()
 	}()
 
 	scanner := bufio.NewScanner(file)
 
-	scanner.Scan()
-	text := scanner.Text()
+	currentLine := 0
+	for scanner.Scan() {
+		if currentLine == lineNumber {
+			return scanner.Text(), nil
+		}
+		currentLine++
+	}
 
-	return text, scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+
+	return "", fmt.Errorf("line %d not found in file", lineNumber)
 }
 
-func readLineAndParseInt(path string) (int64, error) {
-	line, err := readFirstLine(path)
+func readLineAndParseInt(path string, lineNumber int) (int64, error) {
+	line, err := readSpecificLine(path, lineNumber)
 	if err != nil {
 		return -1, err
 	}

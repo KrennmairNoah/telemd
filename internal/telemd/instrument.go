@@ -81,10 +81,14 @@ type DockerCgroupv2NetworkInstrument struct {
 
 type DockerCgroupv1MemoryInstrument struct{}
 type DockerCgroupv2MemoryInstrument struct{}
-
+type KubernetesCgroupv1CpuInstrument struct{}
+type KubernetesCgroupv2CpuInstrument struct{}
 type KubernetesCgroupCpuInstrument struct{}
 type KubernetesCgroupBlkioInstrument struct{}
-type KuberenetesCgroupMemoryInstrument struct{}
+type KubernetesCgroupMemoryInstrument struct{}
+type KubernetesCgroupv1MemoryInstrument struct{}
+type KubernetesCgroupv2MemoryInstrument struct{}
+
 type KubernetesCgroupv1NetworkInstrument struct {
 	pids      map[string]string
 	procMount string
@@ -140,7 +144,7 @@ func (c CpuScalingFrequencyInstrument) MeasureAndReport(channel telem.TelemetryC
 	var sum int64
 
 	for _, match := range cpuScalingFiles {
-		value, err := readLineAndParseInt(match)
+		value, err := readLineAndParseInt(match, 0)
 		check(err)
 		sum += value
 	}
@@ -149,7 +153,7 @@ func (c CpuScalingFrequencyInstrument) MeasureAndReport(channel telem.TelemetryC
 }
 
 func (LoadInstrument) MeasureAndReport(channel telem.TelemetryChannel) {
-	text, err := readFirstLine("/proc/loadavg")
+	text, err := readSpecificLine("/proc/loadavg", 0)
 	check(err)
 
 	parts := strings.Split(text, " ")
@@ -173,7 +177,7 @@ func (LoadInstrument) MeasureAndReport(channel telem.TelemetryChannel) {
 }
 
 func (ProcsInstrument) MeasureAndReport(channel telem.TelemetryChannel) {
-	text, err := readFirstLine("/proc/loadavg")
+	text, err := readSpecificLine("/proc/loadavg", 0)
 	check(err)
 
 	fields := strings.Split(text, " ")
@@ -194,24 +198,24 @@ func (instr *NetworkDataRateInstrument) MeasureAndReport(channel telem.Telemetry
 		rxPath := "/sys/class/net/" + device + "/statistics/rx_bytes"
 		txPath := "/sys/class/net/" + device + "/statistics/tx_bytes"
 
-		rxThen, err := readLineAndParseInt(rxPath)
+		rxThen, err := readLineAndParseInt(rxPath, 0)
 		if err != nil {
 			log.Println("error while reading path", rxPath, err)
 			return
 		}
-		txThen, err := readLineAndParseInt(txPath)
+		txThen, err := readLineAndParseInt(txPath, 0)
 		if err != nil {
 			log.Println("error while reading path", txPath, err)
 			return
 		}
 		time.Sleep(1 * time.Second)
 
-		rxNow, err := readLineAndParseInt(rxPath)
+		rxNow, err := readLineAndParseInt(rxPath, 0)
 		if err != nil {
 			log.Println("error while reading path", rxPath, err)
 			return
 		}
-		txNow, err := readLineAndParseInt(txPath)
+		txNow, err := readLineAndParseInt(txPath, 0)
 		if err != nil {
 			log.Println("error while reading path", txPath, err)
 			return
@@ -401,8 +405,13 @@ func (DockerCgroupv2CpuInstrument) MeasureAndReport(channel telem.TelemetryChann
 	}
 }
 func readCgroupCpu(containerFolder string) (int64, error) {
-	dataFile := containerFolder + "/cpuacct.usage"
-	value, err := readLineAndParseInt(dataFile)
+	dataFile := containerFolder
+	if checkCgroup() == "v1" {
+		dataFile = dataFile + "/cpuacct.usage"
+	} else {
+		dataFile = dataFile + "/cpu.stat"
+	}
+	value, err := readLineAndParseInt(dataFile, 0)
 	if err != nil {
 		return -1, err
 	}
@@ -412,7 +421,7 @@ func readCgroupCpu(containerFolder string) (int64, error) {
 func readCgroupv2Cpu(containerFolder string) (int64, error) {
 	dataFile := containerFolder + "/cpu.stat"
 	// usage_usec 293933 (cpu in microseconds)
-	value, err := readFirstLine(dataFile)
+	value, err := readSpecificLine(dataFile, 0)
 	if err != nil {
 		return -1, err
 	}
@@ -421,7 +430,34 @@ func readCgroupv2Cpu(containerFolder string) (int64, error) {
 	if err != nil {
 		return -1, err
 	}
-	// convert to nanoseconds - cgroup v1 default
+	return parsed * 1000, nil
+}
+
+func readCgroupv2CpuUser(containerFolder string) (int64, error) {
+	dataFile := containerFolder + "/cpu.stat"
+	value, err := readSpecificLine(dataFile, 1)
+	if err != nil {
+		return -1, err
+	}
+	unparsed := strings.Split(value, " ")[1]
+	parsed, err := strconv.ParseInt(unparsed, 10, 64)
+	if err != nil {
+		return -1, err
+	}
+	return parsed * 1000, nil
+}
+
+func readCgroupv2CpuSystem(containerFolder string) (int64, error) {
+	dataFile := containerFolder + "/cpu.stat"
+	value, err := readSpecificLine(dataFile, 2)
+	if err != nil {
+		return -1, err
+	}
+	unparsed := strings.Split(value, " ")[1]
+	parsed, err := strconv.ParseInt(unparsed, 10, 64)
+	if err != nil {
+		return -1, err
+	}
 	return parsed * 1000, nil
 }
 
@@ -462,11 +498,28 @@ func fetchKubernetesContainerDirs(kubepodDir string) []string {
 			containerDirs = append(containerDirs, containerDir)
 		}
 	}
+	if len(containerDirs) == 0 {
+		dirs, _ := listFilterDir(kubepodDir, func(info os.FileInfo) bool {
+			return info.IsDir() // Only include directories
+		})
+
+		for _, dir := range dirs {
+			fullPath := filepath.Join(kubepodDir, dir)      // Construct full path
+			containerDirs = append(containerDirs, fullPath) // Append full path to containerDirs
+		}
+	}
 	return containerDirs
 }
 
-func (KubernetesCgroupCpuInstrument) MeasureAndReport(channel telem.TelemetryChannel) {
-	var kubepodRootDir = "/sys/fs/cgroup/cpuacct/kubepods"
+func (c KubernetesCgroupv1CpuInstrument) MeasureAndReport(channel telem.TelemetryChannel) {
+	var kubepodRootDir = "/sys/fs/cgroup"
+
+	if checkCgroup() == "v1" {
+		kubepodRootDir += "/cpuacct/kubepods"
+	} else {
+		kubepodRootDir += "/kubepods"
+	}
+
 	var bestEffortDir = kubepodRootDir + "/" + "besteffort"
 	var burstableDir = kubepodRootDir + "/" + "burstable"
 	var guaranteedDir = kubepodRootDir + "/" + "guaranteed"
@@ -478,7 +531,6 @@ func (KubernetesCgroupCpuInstrument) MeasureAndReport(channel telem.TelemetryCha
 					containerId := filepath.Base(containerDir)
 					value, err := readCgroupCpu(containerDir)
 					if err == nil {
-						log.Println(value)
 						channel.Put(telem.NewTelemetry("kubernetes_cgrp_cpu/"+containerId, float64(value)))
 					} else {
 						log.Println("error reading data file", containerId, err)
@@ -488,6 +540,37 @@ func (KubernetesCgroupCpuInstrument) MeasureAndReport(channel telem.TelemetryCha
 			}
 		}(kubepodDir)
 
+	}
+}
+
+func (c KubernetesCgroupv2CpuInstrument) MeasureAndReport(channel telem.TelemetryChannel) {
+	kubepodRootDir := "/sys/fs/cgroup/k8s.io"
+
+	for _, containerDir := range fetchKubernetesContainerDirs(kubepodRootDir) {
+		containerId := filepath.Base(containerDir)
+		memoryUsage, err := readCgroupv2Memory(containerDir)
+		// container/pod already dead and not updating anymore
+		if memoryUsage == 0 {
+			continue
+		}
+		total, err := readCgroupv2Cpu(containerDir) // Read Total CPU usage for cgroup v2
+		if err == nil {
+			channel.Put(telem.NewTelemetry("kubernetes_cgrp_cpu/"+containerId, float64(total)))
+		} else {
+			log.Println("Error reading CPU data from", containerDir, ":", err)
+		}
+		user, err := readCgroupv2CpuUser(containerDir) // Read User CPU usage for cgroup v2
+		if err == nil {
+			channel.Put(telem.NewTelemetry("kubernetes_cgrp_cpu_user/"+containerId, float64(user)))
+		} else {
+			log.Println("Error reading CPU data from", containerDir, ":", err)
+		}
+		system, err := readCgroupv2CpuSystem(containerDir) // Read Kernel CPU usage for cgroup v2
+		if err == nil {
+			channel.Put(telem.NewTelemetry("kubernetes_cgrp_cpu_system,/"+containerId, float64(system)))
+		} else {
+			log.Println("Error reading CPU data from", containerDir, ":", err)
+		}
 	}
 }
 
@@ -548,7 +631,7 @@ func (c *DockerCgroupv1NetworkInstrument) MeasureAndReport(channel telem.Telemet
 }
 
 func (c KubernetesCgroupv1NetworkInstrument) MeasureAndReport(channel telem.TelemetryChannel) {
-	var kubepodRootDir = "/sys/fs/cgroup/cpuacct/kubepods"
+	var kubepodRootDir = "/sys/fs/cgroup/kubepods"
 	var bestEffortDir = kubepodRootDir + "/" + "besteffort"
 	var burstableDir = kubepodRootDir + "/" + "burstable"
 	var guaranteedDir = kubepodRootDir + "/" + "guaranteed"
@@ -868,14 +951,14 @@ func readCgroupMemory(containerDir string) (int64, error) {
 
 func readCgroupv2Memory(containerDir string) (int64, error) {
 	dataFile := containerDir + "/memory.current"
-	value, err := readLineAndParseInt(dataFile)
+	value, err := readLineAndParseInt(dataFile, 0)
 	if err != nil {
 		return -1, err
 	}
 	return value, nil
 }
 
-func (k KuberenetesCgroupMemoryInstrument) MeasureAndReport(ch telem.TelemetryChannel) {
+func (k KubernetesCgroupv1MemoryInstrument) MeasureAndReport(ch telem.TelemetryChannel) {
 	var kubepodRootDir = "/sys/fs/cgroup/memory/kubepods"
 	var bestEffortDir = kubepodRootDir + "/" + "besteffort"
 	var burstableDir = kubepodRootDir + "/" + "burstable"
@@ -891,6 +974,20 @@ func (k KuberenetesCgroupMemoryInstrument) MeasureAndReport(ch telem.TelemetryCh
 				log.Println("error reading data file", containerId, err)
 			}
 		}
+	}
+}
+
+func (k KubernetesCgroupv2MemoryInstrument) MeasureAndReport(ch telem.TelemetryChannel) {
+	kubepodRootDir := "/sys/fs/cgroup/kubepods"
+	for _, containerDir := range fetchKubernetesContainerDirs(kubepodRootDir) {
+		containerId := filepath.Base(containerDir)
+		memoryUsage, err := readCgroupv2Memory(containerDir)
+		if err == nil {
+			ch.Put(telem.NewTelemetry("kubernetes_cgrp_memory/"+containerId, float64(memoryUsage)))
+		} else {
+			log.Println("Error reading memory data from", containerDir, ":", err)
+		}
+
 	}
 }
 
@@ -968,7 +1065,10 @@ func (d defaultInstrumentFactory) NewDockerCgroupCpuInstrument() Instrument {
 }
 
 func (d defaultInstrumentFactory) NewKubernetesCgroupCpuInstrument() Instrument {
-	return KubernetesCgroupCpuInstrument{}
+	if checkCgroup() == "v1" {
+		return KubernetesCgroupv1CpuInstrument{}
+	}
+	return KubernetesCgroupv2CpuInstrument{}
 }
 
 func (d defaultInstrumentFactory) NewDockerCgroupBlkioInstrument() Instrument {
@@ -1007,7 +1107,11 @@ func (d defaultInstrumentFactory) NewKubernetesCgroupBlkioInstrument() Instrumen
 }
 
 func (d defaultInstrumentFactory) NewKubernetesCgroupMemoryInstrument() Instrument {
-	return KuberenetesCgroupMemoryInstrument{}
+	if checkCgroup() == "v1" {
+		return KubernetesCgroupv1MemoryInstrument{}
+	}
+	return KubernetesCgroupv2MemoryInstrument{}
+
 }
 func (d defaultInstrumentFactory) NewKubernetesCgroupNetInstrument(procMount string) Instrument {
 	pidMap, err := containerProcessIds(procMount)

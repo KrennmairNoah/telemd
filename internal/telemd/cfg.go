@@ -77,9 +77,9 @@ func NewDefaultConfig() *Config {
 		"docker_cgrp_blkio":      1 * time.Second,
 		"docker_cgrp_net":        1 * time.Second,
 		"docker_cgrp_memory":     1 * time.Second,
-		"kubernetes_cgrp_cpu":    1 * time.Second,
+		"kubernetes_cgrp_cpu":    500 * time.Millisecond,
 		"kubernetes_cgrp_blkio":  1 * time.Second,
-		"kubernetes_cgrp_memory": 1 * time.Second,
+		"kubernetes_cgrp_memory": 500 * time.Millisecond,
 		"kubernetes_cgrp_net":    1 * time.Second,
 	}
 
@@ -169,7 +169,7 @@ func listFilterDir(dirname string, predicate func(info os.FileInfo) bool) ([]str
 
 func networkDevices() ([]string, error) {
 	return listFilterDir("/sys/class/net", func(info os.FileInfo) bool {
-		return !info.IsDir() && info.Name() != "lo"
+		return !info.IsDir()
 	})
 }
 
@@ -189,7 +189,7 @@ func netSpeed() (string, error) {
 		return findWifiSpeed(activeNetDevice)
 	} else {
 		path := "/sys/class/net/" + activeNetDevice + "/speed"
-		return readFirstLine(path)
+		return readSpecificLine(path, 0)
 	}
 }
 
