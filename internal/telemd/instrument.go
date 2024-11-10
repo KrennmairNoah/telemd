@@ -547,7 +547,7 @@ func (c KubernetesCgroupv2CpuInstrument) MeasureAndReport(channel telem.Telemetr
 	//or /k8s.io
 	kubepodRootDir := "/sys/fs/cgroup/kubepods"
 
-	for _, kubepodDir := range [3]string{kubepodRootDir+"besteffort", kubepodRootDir+"burstable"/*, kubepodRootDir+"guaranteedDirname"*/} {
+	for _, kubepodDir := range [3]string{kubepodRootDir+"/besteffort", kubepodRootDir+"/burstable"/*, kubepodRootDir+"/guaranteedDirname"*/} {
 		for _, containerDir := range fetchKubernetesContainerDirs(kubepodDir) {
 			containerId := filepath.Base(containerDir)
 			memoryUsage, err := readCgroupv2Memory(containerDir)
@@ -984,7 +984,7 @@ func (k KubernetesCgroupv2MemoryInstrument) MeasureAndReport(ch telem.TelemetryC
 
 	kubepodRootDir := "/sys/fs/cgroup/kubepods"
 
-	for _, kubepodDir := range [3]string{kubepodRootDir+"besteffort", kubepodRootDir+"burstable"/*, kubepodRootDir+"guaranteedDirname"*/} {
+	for _, kubepodDir := range [3]string{kubepodRootDir+"/besteffort", kubepodRootDir+"/burstable"/*, kubepodRootDir+"/guaranteedDirname"*/} {
 		for _, containerDir := range fetchKubernetesContainerDirs(kubepodDir) {
 			containerId := filepath.Base(containerDir)
 			memoryUsage, err := readCgroupv2Memory(containerDir)
