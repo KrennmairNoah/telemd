@@ -22,4 +22,4 @@ clean:
 
 docker:
 	scripts/docker-build.sh
-	scripts/docker-release.sh
+	#scripts/docker-release.sh
