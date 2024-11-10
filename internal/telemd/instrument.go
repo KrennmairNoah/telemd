@@ -979,16 +979,21 @@ func (k KubernetesCgroupv1MemoryInstrument) MeasureAndReport(ch telem.TelemetryC
 }
 
 func (k KubernetesCgroupv2MemoryInstrument) MeasureAndReport(ch telem.TelemetryChannel) {
-	kubepodRootDir := "/sys/fs/cgroup/kubepods"
-	for _, containerDir := range fetchKubernetesContainerDirs(kubepodRootDir) {
-		containerId := filepath.Base(containerDir)
-		memoryUsage, err := readCgroupv2Memory(containerDir)
-		if err == nil {
-			ch.Put(telem.NewTelemetry("kubernetes_cgrp_memory/"+containerId, float64(memoryUsage)))
-		} else {
-			log.Println("Error reading memory data from", containerDir, ":", err)
-		}
+	var kubepodRootDir = "/sys/fs/cgroup/kubepods"
+	var bestEffortDir = kubepodRootDir + "/" + "besteffort"
+	var burstableDir = kubepodRootDir + "/" + "burstable"
+	var guaranteedDir = kubepodRootDir + "/" + "guaranteed"
 
+	for _, kubePodDir := range [3]string{bestEffortDir, burstableDir, guaranteedDir} {
+		for _, containerDir := range fetchKubernetesContainerDirs(kubePodDir) {
+			containerId := filepath.Base(containerDir)
+			value, err := readCgroupv2Memory(containerDir)
+			if err == nil {
+				ch.Put(telem.NewTelemetry("kubernetes_cgrp_memory/"+containerId, float64(value)))
+			} else {
+				log.Println("error reading data file", containerId, err)
+			}
+		}
 	}
 }
 
