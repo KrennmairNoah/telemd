@@ -545,15 +545,13 @@ func (c KubernetesCgroupv1CpuInstrument) MeasureAndReport(channel telem.Telemetr
 
 func (c KubernetesCgroupv2CpuInstrument) MeasureAndReport(channel telem.TelemetryChannel) {
 	
-	kubepodRootDir := "/sys/fs/cgroup/kubepods"//or /k8s.io
+	burstableDirname := "/sys/fs/cgroup/kubepod/burstable"
+	bestEffortDirname := "/sys/fs/cgroup/kubepods/besteffort"
+	//guaranteedDirname := "/sys/fs/cgroup/kubepods/guaranteed"
 
-	burstableDirname := kubepodRootDir + "/burstable"
-	bestEffortDirname := kubepodRootDir + "/besteffort"
-	guaranteedDirname := kubepodRootDir + "/guaranteed"
-	
 	r, _ := regexp.Compile("[0-9a-zA-Z]{32}")
 
-	for _, kubepodDir := range [3]string{bestEffortDirname, burstableDirname, guaranteedDirname} {
+	for _, kubepodDir := range [3]string{bestEffortDirname, burstableDirname/*, guaranteedDirname*/} {
 		go func(kubepodDir string) {
 			for _, containerDir := range fetchKubernetesContainerDirs(kubepodDir) {
 				go func(containerDir string) {
@@ -568,7 +566,6 @@ func (c KubernetesCgroupv2CpuInstrument) MeasureAndReport(channel telem.Telemetr
 				}(containerDir)
 			}
 		}(kubepodDir)
-
 	}
 }
 
@@ -978,10 +975,10 @@ func (k KubernetesCgroupv1MemoryInstrument) MeasureAndReport(ch telem.TelemetryC
 func (k KubernetesCgroupv2MemoryInstrument) MeasureAndReport(ch telem.TelemetryChannel) {
 	burstableDirname := "/sys/fs/cgroup/kubepods/burstable"
 	bestEffortDirname := "/sys/fs/cgroup/kubepods/besteffort"
-	guaranteedDirname := "/sys/fs/cgroup/kubepods/guaranteed"
+	//guaranteedDirname := "/sys/fs/cgroup/kubepods/guaranteed"
 	r, _ := regexp.Compile("[0-9a-zA-Z]{32}")
 
-	for _, kubepodDir := range [3]string{bestEffortDirname, burstableDirname, guaranteedDirname} {
+	for _, kubepodDir := range [3]string{bestEffortDirname, burstableDirname/*, guaranteedDirname*/} {
 		go func(kubepodDir string) {
 			for _, containerDir := range fetchKubernetesContainerDirs(kubepodDir) {
 				go func(containerDir string) {
